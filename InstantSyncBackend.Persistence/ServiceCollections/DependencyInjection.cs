@@ -76,6 +76,17 @@ public static class DependencyInjection
             };
         });
 
+        // Configure CORS
+        services.AddCors(options =>
+        {
+            options.AddPolicy("DefaultPolicy", builder =>
+            {
+                builder.AllowAnyOrigin()
+                       .AllowAnyMethod()
+                       .AllowAnyHeader();
+            });
+        });
+
         // Register repositories
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<ITransactionRepository, TransactionRepository>();
