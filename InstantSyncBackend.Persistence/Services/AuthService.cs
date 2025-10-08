@@ -12,34 +12,8 @@ using System.Net;
 
 namespace InstantSyncBackend.Persistence.Services;
 
-public class AuthService : IAuthService
+public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGenerator _jwtTokenGenerator, IValidator<RegisterDto> _registerValidator, IValidator<LoginDto> _loginValidator, IValidator<ForgotPasswordDto> _forgotPasswordValidator, IEmailService _emailService, ILogger<AuthService> _logger) : IAuthService
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IJwtTokenGenerator _jwtTokenGenerator;
-    private readonly IValidator<RegisterDto> _registerValidator;
-    private readonly IValidator<LoginDto> _loginValidator;
-    private readonly IValidator<ForgotPasswordDto> _forgotPasswordValidator;
-    private readonly IEmailService _emailService;
-    private readonly ILogger<AuthService> _logger;
-
-    public AuthService(
-        UserManager<ApplicationUser> userManager,
-        IJwtTokenGenerator jwtTokenGenerator,
-        IValidator<RegisterDto> registerValidator,
-        IValidator<LoginDto> loginValidator,
-        IValidator<ForgotPasswordDto> forgotPasswordValidator,
-        IEmailService emailService,
-        ILogger<AuthService> logger)
-    {
-        _userManager = userManager;
-        _jwtTokenGenerator = jwtTokenGenerator;
-        _registerValidator = registerValidator;
-        _loginValidator = loginValidator;
-        _forgotPasswordValidator = forgotPasswordValidator;
-        _emailService = emailService;
-        _logger = logger;
-    }
-
     public async Task<BaseResponse<AuthResponseDto>> RegisterAsync(RegisterDto registerDto)
     {
         _logger.LogInformation("Starting user registration process for email: {Email}", registerDto.Email);
@@ -69,7 +43,15 @@ public class AuthService : IAuthService
 
         _logger.LogInformation("User successfully registered with email: {Email}", registerDto.Email);
         var token = _jwtTokenGenerator.GenerateToken(user);
-        var response = new AuthResponseDto { Token = token, Message = "User registered successfully" };
+        var response = new AuthResponseDto
+        { 
+            Token = token,
+            Message = "User registered successfully",
+            UserId = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            PhoneNumber = user.PhoneNumber ?? string.Empty
+        };
         return BaseResponse<AuthResponseDto>.Succes(response);
     }
 
@@ -96,7 +78,15 @@ public class AuthService : IAuthService
 
         _logger.LogInformation("User successfully logged in: {EmailOrPhone}", loginDto.EmailOrPhone);
         var token = _jwtTokenGenerator.GenerateToken(user);
-        var response = new AuthResponseDto { Token = token, Message = "Login successful" };
+        var response = new AuthResponseDto
+        { 
+            Token = token,
+            Message = "Login successful",
+            UserId = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            PhoneNumber = user.PhoneNumber ?? string.Empty
+        };
         return BaseResponse<AuthResponseDto>.Succes(response);
     }
 
