@@ -1,3 +1,5 @@
+using InstantSyncBackend.Domain.Enums;
+
 namespace InstantSyncBackend.Application.Dtos;
 
 public class TransferDto
@@ -20,6 +22,7 @@ public class TransactionResponseDto
     public string ResponseCode { get; set; }
     public string ResponseDescription { get; set; }
     public DateTime SettlementDate { get; set; }
+    public TransactionStatus Status { get; set; }
     public decimal Amount { get; set; }
     public string OriginatorAccountNumber { get; set; }
     public string BeneficiaryAccountNumber { get; set; }

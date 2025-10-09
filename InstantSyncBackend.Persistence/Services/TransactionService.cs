@@ -26,6 +26,19 @@ public class TransactionService(IAccountRepository _accountRepository, ITransact
                 return BaseResponse<TransactionResponseDto>.Failure("Insufficient funds");
             }
 
+            // Validate beneficiary account exists
+            var beneficiaryAccount = await _accountRepository.GetByAccountNumberAsync(transferDto.BeneficiaryAccountNumber);
+            if (beneficiaryAccount == null)
+            {
+                return BaseResponse<TransactionResponseDto>.Failure("Beneficiary account not found");
+            }
+
+            // Prevent self-transfer
+            if (account.AccountNumber == transferDto.BeneficiaryAccountNumber)
+            {
+                return BaseResponse<TransactionResponseDto>.Failure("Cannot transfer to your own account");
+            }
+
             // Create transaction record
             var transaction = new Transaction
             {
@@ -33,7 +46,7 @@ public class TransactionService(IAccountRepository _accountRepository, ITransact
                 AccountId = account.Id,
                 Amount = transferDto.Amount,
                 Type = TransactionType.Transfer,
-                Status = TransactionStatus.Initiated,
+                Status = TransactionStatus.Completed,
                 BeneficiaryAccountNumber = transferDto.BeneficiaryAccountNumber,
                 BeneficiaryBankName = transferDto.BeneficiaryBankName,
                 Description = transferDto.Description
@@ -56,6 +69,7 @@ public class TransactionService(IAccountRepository _accountRepository, ITransact
                 ResponseDescription = "Transaction processing",
                 SettlementDate = DateTime.UtcNow.AddMinutes(5),
                 Amount = transferDto.Amount,
+                Status = transaction.Status,
                 OriginatorAccountNumber = account.AccountNumber,
                 BeneficiaryAccountNumber = transferDto.BeneficiaryAccountNumber
             };
