@@ -9,10 +9,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.WebUtilities;
 using System.Text;
 using System.Net;
+using InstantSyncBackend.Application.Interfaces.IRepositories;
 
 namespace InstantSyncBackend.Persistence.Services;
 
-public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGenerator _jwtTokenGenerator, IValidator<RegisterDto> _registerValidator, IValidator<LoginDto> _loginValidator, IValidator<ForgotPasswordDto> _forgotPasswordValidator, IEmailService _emailService, ILogger<AuthService> _logger) : IAuthService
+public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGenerator _jwtTokenGenerator, IValidator<RegisterDto> _registerValidator, IValidator<LoginDto> _loginValidator, IValidator<ForgotPasswordDto> _forgotPasswordValidator, IEmailService _emailService, IAccountRepository _accountRepository, ILogger<AuthService> _logger) : IAuthService
 {
     public async Task<BaseResponse<AuthResponseDto>> RegisterAsync(RegisterDto registerDto)
     {
@@ -25,12 +26,22 @@ public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGen
             return BaseResponse<AuthResponseDto>.ValidationFailure(validationResult.Errors.Select(e => e.ErrorMessage).ToList());
         }
 
+        // Generate unique account number
+        string accountNumber;
+        var random = new Random();
+        do
+        {
+            accountNumber = string.Concat(Enumerable.Range(0, 10).Select(_ => random.Next(0, 10).ToString()));
+        }
+        while (await _userManager.Users.AnyAsync(u => u.AccountNumber == accountNumber));
+
         var user = new ApplicationUser
         {
             UserName = registerDto.Email,
             Email = registerDto.Email,
             PhoneNumber = registerDto.PhoneNumber,
-            FullName = registerDto.FullName
+            FullName = registerDto.FullName,
+            AccountNumber = accountNumber
         };
 
         var result = await _userManager.CreateAsync(user, registerDto.Password);
@@ -39,6 +50,26 @@ public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGen
             _logger.LogError("User creation failed for email: {Email}. Errors: {Errors}", 
                 registerDto.Email, string.Join(", ", result.Errors.Select(e => e.Description)));
             return BaseResponse<AuthResponseDto>.ValidationFailure(result.Errors.Select(e => e.Description).ToList());
+        }
+
+        // Create account record linked to the user
+        try
+        {
+            var account = new Account
+            {
+                UserId = user.Id,
+                AccountNumber = accountNumber,
+                Balance = 0m,
+                PendingBalance = 0m
+            };
+
+            await _accountRepository.AddAsync(account);
+            await _accountRepository.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create account record for user {UserId}", user.Id);
+            // do not fail registration for now
         }
 
         _logger.LogInformation("User successfully registered with email: {Email}", registerDto.Email);

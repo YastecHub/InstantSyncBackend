@@ -94,6 +94,7 @@ public static class DependencyInjection
         // Register services
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITransactionService, TransactionService>();
+        services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
         services.AddScoped<IEmailService, EmailService>();
