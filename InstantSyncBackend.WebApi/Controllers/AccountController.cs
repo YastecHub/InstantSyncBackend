@@ -7,24 +7,17 @@ using System.Security.Claims;
 
 namespace InstantSyncBackend.WebApi.Controllers;
 
-[Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class AccountController : ControllerBase
+public class AccountController(IAccountService _accountService) : ControllerBase
 {
-    private readonly IAccountService _accountService;
-
-    public AccountController(IAccountService accountService)
-    {
-        _accountService = accountService;
-    }
-
     /// <summary>
     /// Gets account details for a specific user
     /// </summary>
     /// <param name="userId">The user ID to get account details for</param>
     /// <returns>Account details including balance and account number</returns>
     [HttpGet("user/{userId}")]
+    [Authorize]
     public async Task<ActionResult<BaseResponse<AccountDetailsDto>>> GetUserAccount(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId))
@@ -46,6 +39,7 @@ public class AccountController : ControllerBase
     /// </summary>
     /// <returns>Current user's account details</returns>
     [HttpGet("my-account")]
+    [Authorize]
     public async Task<ActionResult<BaseResponse<AccountDetailsDto>>> GetMyAccount()
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
@@ -68,6 +62,7 @@ public class AccountController : ControllerBase
     /// </summary>
     /// <returns>Current user's account balance information</returns>
     [HttpGet("balance")]
+    [Authorize]
     public async Task<ActionResult<BaseResponse<AccountDetailsDto>>> GetAccountBalance()
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
@@ -91,7 +86,6 @@ public class AccountController : ControllerBase
     /// <param name="accountNumber">The account number to get details for</param>
     /// <returns>Account details including balance and user information</returns>
     [HttpGet("get-accountdetails-by-account-number/{accountNumber}")]
-    [Authorize]
     public async Task<ActionResult<BaseResponse<AccountDetailsDto>>> GetAccountByNumber(string accountNumber)
     {
         if (string.IsNullOrWhiteSpace(accountNumber))
