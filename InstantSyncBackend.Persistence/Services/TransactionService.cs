@@ -1,3 +1,4 @@
+using FluentValidation;
 using InstantSyncBackend.Application.Common;
 using InstantSyncBackend.Application.Dtos;
 using InstantSyncBackend.Application.Interfaces.IRepositories;
@@ -9,14 +10,23 @@ using Microsoft.Extensions.Logging;
 namespace InstantSyncBackend.Persistence.Services;
 
 public class TransactionService(
-    IAccountRepository _accountRepository, 
-    ITransactionRepository _transactionRepository, 
+    IAccountRepository _accountRepository,
+    ITransactionRepository _transactionRepository,
+    IValidator<TransferDto> _transferValidator,
+    IValidator<AddFundsDto> _addFundsValidator,
     ILogger<TransactionService> _logger) : ITransactionService
 {
     public async Task<BaseResponse<TransactionResponseDto>> TransferFundsAsync(string userId, TransferDto transferDto)
     {
         try
         {
+            // Validate request
+            var validationResult = await _transferValidator.ValidateAsync(transferDto);
+            if (!validationResult.IsValid)
+            {
+                return BaseResponse<TransactionResponseDto>.ValidationFailure(validationResult.Errors.Select(e => e.ErrorMessage).ToList());
+            }
+
             var account = await _accountRepository.GetByUserIdAsync(userId);
 
             if (account == null)
@@ -72,7 +82,6 @@ public class TransactionService(
                 ResponseDescription = "Transaction processing",
                 SettlementDate = DateTime.UtcNow.AddMinutes(5),
                 Amount = transferDto.Amount,
-                Status = transaction.Status,
                 OriginatorAccountNumber = account.AccountNumber,
                 BeneficiaryAccountNumber = transferDto.BeneficiaryAccountNumber
             };
@@ -93,6 +102,13 @@ public class TransactionService(
     {
         try
         {
+            // Validate request
+            var validationResult = await _addFundsValidator.ValidateAsync(addFundsDto);
+            if (!validationResult.IsValid)
+            {
+                return BaseResponse<TransactionResponseDto>.ValidationFailure(validationResult.Errors.Select(e => e.ErrorMessage).ToList());
+            }
+
             var account = await _accountRepository.GetByUserIdAsync(userId);
 
             if (account == null)
@@ -142,8 +158,8 @@ public class TransactionService(
     }
 
     public async Task<BaseResponse<List<TransactionHistoryDto>>> GetTransactionHistoryAsync(
-        string userId, 
-        DateTime? startDate = null, 
+        string userId,
+        DateTime? startDate = null,
         DateTime? endDate = null)
     {
         try
