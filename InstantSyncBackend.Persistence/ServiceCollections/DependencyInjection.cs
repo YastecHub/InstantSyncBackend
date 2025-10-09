@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using InstantSyncBackend.Application.Interfaces.IRepositories;
 using InstantSyncBackend.Application.Interfaces.IServices;
 using InstantSyncBackend.Application.Models;
@@ -36,12 +36,20 @@ public static class DependencyInjection
         services.AddLogging(loggingBuilder =>
             loggingBuilder.AddSerilog(logger, dispose: true));
 
-        // DbContext with PostgreSQL
+        // DbContext with PostgreSQL - Add performance optimizations
         services.AddDbContext<ApplicationDbContext>(options =>
+        {
             options.UseNpgsql(
                 configuration.GetConnectionString("DefaultConnection"),
-                b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)
-            ));
+                npgsqlOptions =>
+                {
+                    npgsqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
+                    npgsqlOptions.CommandTimeout(30); // 30 second timeout
+                })
+                .EnableSensitiveDataLogging(false) // Disable in production
+                .EnableServiceProviderCaching()    // Cache service provider
+                .EnableDetailedErrors(false);      // Disable detailed errors in production
+        });
 
         // Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -101,6 +109,12 @@ public static class DependencyInjection
 
         // FluentValidation
         services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
+
+        // Add memory caching for better performance
+        services.AddMemoryCache();
+        
+        // Configure HTTP client
+        services.AddHttpClient();
 
         return services;
     }

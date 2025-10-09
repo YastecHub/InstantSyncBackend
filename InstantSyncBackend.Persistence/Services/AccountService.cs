@@ -19,13 +19,22 @@ public class AccountService : IAccountService
 
     public async Task<BaseResponse<AccountDetailsDto>> GetAccountDetailsByUserIdAsync(string userId)
     {
+        _logger.LogInformation("Retrieving account details for user: {UserId}", userId);
+        
         try
         {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                _logger.LogWarning("GetAccountDetailsByUserIdAsync called with null or empty userId");
+                return BaseResponse<AccountDetailsDto>.Failure("User ID cannot be null or empty");
+            }
+
             var account = await _accountRepository.GetByUserIdAsync(userId);
 
             if (account == null)
             {
-                return BaseResponse<AccountDetailsDto>.Failure("Account not found");
+                _logger.LogWarning("Account not found for user: {UserId}", userId);
+                return BaseResponse<AccountDetailsDto>.Failure("Account not found for this user");
             }
 
             var accountDetails = new AccountDetailsDto
@@ -36,7 +45,10 @@ public class AccountService : IAccountService
                 PendingBalance = account.PendingBalance
             };
 
-            return BaseResponse<AccountDetailsDto>.Succes(accountDetails);
+            _logger.LogInformation("Successfully retrieved account details for user: {UserId}, Account: {AccountNumber}", 
+                userId, account.AccountNumber);
+
+            return BaseResponse<AccountDetailsDto>.Succes(accountDetails, "Account details retrieved successfully");
         }
         catch (Exception ex)
         {

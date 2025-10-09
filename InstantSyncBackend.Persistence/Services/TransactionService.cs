@@ -33,7 +33,7 @@ public class TransactionService(IAccountRepository _accountRepository, ITransact
                 AccountId = account.Id,
                 Amount = transferDto.Amount,
                 Type = TransactionType.Transfer,
-                Status = TransactionStatus.Processing,
+                Status = TransactionStatus.Initiated,
                 BeneficiaryAccountNumber = transferDto.BeneficiaryAccountNumber,
                 BeneficiaryBankName = transferDto.BeneficiaryBankName,
                 Description = transferDto.Description
@@ -90,7 +90,7 @@ public class TransactionService(IAccountRepository _accountRepository, ITransact
                 AccountId = account.Id,
                 Amount = addFundsDto.Amount,
                 Type = TransactionType.Deposit,
-                Status = TransactionStatus.Processing,
+                Status = TransactionStatus.Initiated,
                 Description = $"Deposit via {addFundsDto.PaymentMethod}"
             };
 

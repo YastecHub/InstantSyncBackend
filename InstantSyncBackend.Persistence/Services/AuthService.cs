@@ -19,6 +19,7 @@ public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGen
     {
         _logger.LogInformation("Starting user registration process for email: {Email}", registerDto.Email);
         
+        // Validate input data
         var validationResult = await _registerValidator.ValidateAsync(registerDto);
         if (!validationResult.IsValid)
         {
@@ -26,64 +27,82 @@ public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGen
             return BaseResponse<AuthResponseDto>.ValidationFailure(validationResult.Errors.Select(e => e.ErrorMessage).ToList());
         }
 
-        // Generate unique account number
-        string accountNumber;
-        var random = new Random();
-        do
+        // Check if user already exists
+        var existingUser = await _userManager.FindByEmailAsync(registerDto.Email);
+        if (existingUser != null)
         {
-            accountNumber = string.Concat(Enumerable.Range(0, 10).Select(_ => random.Next(0, 10).ToString()));
+            _logger.LogWarning("User already exists with email: {Email}", registerDto.Email);
+            return BaseResponse<AuthResponseDto>.Failure("User with this email already exists");
         }
-        while (await _userManager.Users.AnyAsync(u => u.AccountNumber == accountNumber));
 
+        // Generate unique account number
+        string accountNumber = await GenerateUniqueAccountNumberAsync();
+        
+        // Create user entity
         var user = new ApplicationUser
         {
             UserName = registerDto.Email,
             Email = registerDto.Email,
             PhoneNumber = registerDto.PhoneNumber,
             FullName = registerDto.FullName,
-            AccountNumber = accountNumber
+            AccountNumber = accountNumber,
+            EmailConfirmed = true
         };
 
-        var result = await _userManager.CreateAsync(user, registerDto.Password);
-        if (!result.Succeeded)
+        // Create user in Identity system
+        var userResult = await _userManager.CreateAsync(user, registerDto.Password);
+        if (!userResult.Succeeded)
         {
             _logger.LogError("User creation failed for email: {Email}. Errors: {Errors}", 
-                registerDto.Email, string.Join(", ", result.Errors.Select(e => e.Description)));
-            return BaseResponse<AuthResponseDto>.ValidationFailure(result.Errors.Select(e => e.Description).ToList());
+                registerDto.Email, string.Join(", ", userResult.Errors.Select(e => e.Description)));
+            return BaseResponse<AuthResponseDto>.ValidationFailure(userResult.Errors.Select(e => e.Description).ToList());
         }
 
-        // Create account record linked to the user
+        // Create associated account with zero balances
         try
         {
             var account = new Account
             {
                 UserId = user.Id,
                 AccountNumber = accountNumber,
-                Balance = 0m,
-                PendingBalance = 0m
+                Balance = 0.00m,           // Initialize balance to zero
+                PendingBalance = 0.00m,    // Initialize pending balance to zero
+                User = user
             };
 
             await _accountRepository.AddAsync(account);
             await _accountRepository.SaveChangesAsync();
+            
+            _logger.LogInformation("Account successfully created for user {UserId} with account number {AccountNumber}", 
+                user.Id, accountNumber);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create account record for user {UserId}", user.Id);
-            // do not fail registration for now
+            _logger.LogError(ex, "Failed to create account for user {UserId}. Rolling back user creation.", user.Id);
+            
+            // Rollback user creation if account creation fails
+            await _userManager.DeleteAsync(user);
+            
+            return BaseResponse<AuthResponseDto>.Failure("Failed to create user account. Please try again.");
         }
 
-        _logger.LogInformation("User successfully registered with email: {Email}", registerDto.Email);
+        // Generate JWT token for immediate login
         var token = _jwtTokenGenerator.GenerateToken(user);
+        
+        _logger.LogInformation("User and account successfully created for email: {Email} with account number: {AccountNumber}", 
+            registerDto.Email, accountNumber);
+
         var response = new AuthResponseDto
         { 
             Token = token,
-            Message = "User registered successfully",
+            Message = "Account created successfully",
             UserId = user.Id,
             FullName = user.FullName,
-            Email = user.Email,
+            Email = user.Email!,
             PhoneNumber = user.PhoneNumber ?? string.Empty
         };
-        return BaseResponse<AuthResponseDto>.Succes(response);
+        
+        return BaseResponse<AuthResponseDto>.Succes(response, "Registration successful");
     }
 
     public async Task<BaseResponse<AuthResponseDto>> LoginAsync(LoginDto loginDto)
@@ -196,5 +215,35 @@ public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGen
                <p>Best regards,<br>InstantSync Team</p>");
 
         return BaseResponse<string>.Succes("Your password has been reset successfully");
+    }
+
+    /// <summary>
+    /// Generates a unique 10-digit account number
+    /// </summary>
+    private async Task<string> GenerateUniqueAccountNumberAsync()
+    {
+        string accountNumber;
+        var random = new Random();
+        int attempts = 0;
+        const int maxAttempts = 10;
+
+        do
+        {
+            // Generate 10-digit account number
+            accountNumber = string.Concat(Enumerable.Range(0, 10).Select(_ => random.Next(0, 10).ToString()));
+            attempts++;
+            
+            if (attempts > maxAttempts)
+            {
+                // Fallback with timestamp to ensure uniqueness
+                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+                accountNumber = timestamp.Substring(Math.Max(0, timestamp.Length - 10)).PadLeft(10, '0');
+                break;
+            }
+        }
+        while (await _userManager.Users.AnyAsync(u => u.AccountNumber == accountNumber) || 
+               await _accountRepository.AccountNumberExistsAsync(accountNumber));
+
+        return accountNumber;
     }
 }

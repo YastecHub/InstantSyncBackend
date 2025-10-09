@@ -8,24 +8,51 @@ namespace InstantSyncBackend.WebApi.Controllers;
 [ApiController]
 public class AuthController(IAuthService _authService) : ControllerBase
 {
-    [HttpPost("signup")]
-    public async Task<IActionResult> Signup([FromBody] RegisterDto registerDto)
+    /// <summary>
+    /// Creates a new user account with associated banking account
+    /// </summary>
+    /// <param name="registerDto">User registration details</param>
+    /// <returns>Authentication response with JWT token</returns>
+    [HttpPost("create-account")]
+    public async Task<IActionResult> CreateAccount([FromBody] RegisterDto registerDto)
     {
         var result = await _authService.RegisterAsync(registerDto);
         return StatusCode(result.StatusCode ?? 200, result);
     }
 
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
+    /// <summary>
+    /// Authenticates user and returns JWT token
+    /// </summary>
+    /// <param name="loginDto">Login credentials</param>
+    /// <returns>Authentication response with JWT token</returns>
+    [HttpPost("signin")]
+    public async Task<IActionResult> SignIn([FromBody] LoginDto loginDto)
     {
         var result = await _authService.LoginAsync(loginDto);
         return StatusCode(result.StatusCode ?? 200, result);
     }
 
-    [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto forgotPasswordDto)
+    /// <summary>
+    /// Initiates password reset process
+    /// </summary>
+    /// <param name="forgotPasswordDto">Email for password reset</param>
+    /// <returns>Success message</returns>
+    [HttpPost("reset-password-request")]
+    public async Task<IActionResult> RequestPasswordReset([FromBody] ForgotPasswordDto forgotPasswordDto)
     {
         var result = await _authService.ForgotPasswordAsync(forgotPasswordDto);
+        return StatusCode(result.StatusCode ?? 200, result);
+    }
+
+    /// <summary>
+    /// Resets user password using reset token
+    /// </summary>
+    /// <param name="resetPasswordDto">Reset password details</param>
+    /// <returns>Success message</returns>
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto resetPasswordDto)
+    {
+        var result = await _authService.ResetPasswordAsync(resetPasswordDto);
         return StatusCode(result.StatusCode ?? 200, result);
     }
 }
