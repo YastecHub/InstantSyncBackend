@@ -65,8 +65,8 @@ public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGen
             {
                 UserId = user.Id,
                 AccountNumber = accountNumber,
-                Balance = 0.00m,           // Initialize balance to zero
-                PendingBalance = 0.00m,    // Initialize pending balance to zero
+                Balance = 0.00m,         
+                PendingBalance = 0.00m,
                 User = user
             };
 

@@ -14,7 +14,9 @@ public class AccountRepository(ApplicationDbContext _dbContext) : IAccountReposi
 
     public async Task<Account?> GetByUserIdAsync(string userId)
     {
-        return await _dbContext.Accounts.FirstOrDefaultAsync(a => a.UserId == userId);
+        return await _dbContext.Accounts
+            .Include(a => a.User)
+            .FirstOrDefaultAsync(a => a.UserId == userId);
     }
 
     public async Task<bool> AccountNumberExistsAsync(string accountNumber)
@@ -47,5 +49,12 @@ public class AccountRepository(ApplicationDbContext _dbContext) : IAccountReposi
     public async Task SaveChangesAsync()
     {
         await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task<Account?> GetByAccountNumberAsync(string accountNumber)
+    {
+        return await _dbContext.Accounts
+            .Include(a => a.User)
+            .FirstOrDefaultAsync(a => a.AccountNumber == accountNumber);
     }
 }

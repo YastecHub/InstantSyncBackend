@@ -84,4 +84,27 @@ public class AccountController : ControllerBase
 
         return Ok(response);
     }
+
+    /// <summary>
+    /// Gets account details by account number
+    /// </summary>
+    /// <param name="accountNumber">The account number to get details for</param>
+    /// <returns>Account details including balance and user information</returns>
+    [HttpGet("get-accountdetails-by-account-number/{accountNumber}")]
+    [Authorize]
+    public async Task<ActionResult<BaseResponse<AccountDetailsDto>>> GetAccountByNumber(string accountNumber)
+    {
+        if (string.IsNullOrWhiteSpace(accountNumber))
+        {
+            return BadRequest(BaseResponse<AccountDetailsDto>.Failure("Account number is required"));
+        }
+
+        var response = await _accountService.GetAccountDetailsByAccountNumberAsync(accountNumber);
+        if (!response.Success)
+        {
+            return BadRequest(response);
+        }
+
+        return Ok(response);
+    }
 }

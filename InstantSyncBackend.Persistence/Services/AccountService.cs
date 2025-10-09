@@ -42,7 +42,15 @@ public class AccountService : IAccountService
                 UserId = account.UserId,
                 AccountNumber = account.AccountNumber,
                 Balance = account.Balance,
-                PendingBalance = account.PendingBalance
+                PendingBalance = account.PendingBalance,
+                User = account.User == null ? null : new ApplicationUserDto
+                {
+                    Id = account.User.Id,
+                    Email = account.User.Email,
+                    PhoneNumber = account.User.PhoneNumber,
+                    FullName = account.User.FullName,
+                    AccountNumber = account.User.AccountNumber
+                }
             };
 
             _logger.LogInformation("Successfully retrieved account details for user: {UserId}, Account: {AccountNumber}", 
@@ -53,6 +61,53 @@ public class AccountService : IAccountService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving account details for user {UserId}", userId);
+            return BaseResponse<AccountDetailsDto>.Failure("An error occurred while retrieving account details");
+        }
+    }
+
+    public async Task<BaseResponse<AccountDetailsDto>> GetAccountDetailsByAccountNumberAsync(string accountNumber)
+    {
+        _logger.LogInformation("Retrieving account details for account number: {AccountNumber}", accountNumber);
+        
+        try
+        {
+            if (string.IsNullOrWhiteSpace(accountNumber))
+            {
+                _logger.LogWarning("GetAccountDetailsByAccountNumberAsync called with null or empty account number");
+                return BaseResponse<AccountDetailsDto>.Failure("Account number cannot be null or empty");
+            }
+
+            var account = await _accountRepository.GetByAccountNumberAsync(accountNumber);
+
+            if (account == null)
+            {
+                _logger.LogWarning("Account not found for account number: {AccountNumber}", accountNumber);
+                return BaseResponse<AccountDetailsDto>.Failure("Account not found");
+            }
+
+            var accountDetails = new AccountDetailsDto
+            {
+                UserId = account.UserId,
+                AccountNumber = account.AccountNumber,
+                Balance = account.Balance,
+                PendingBalance = account.PendingBalance,
+                User = account.User == null ? null : new ApplicationUserDto
+                {
+                    Id = account.User.Id,
+                    Email = account.User.Email,
+                    PhoneNumber = account.User.PhoneNumber,
+                    FullName = account.User.FullName,
+                    AccountNumber = account.User.AccountNumber
+                }
+            };
+
+            _logger.LogInformation("Successfully retrieved account details for account: {AccountNumber}", accountNumber);
+
+            return BaseResponse<AccountDetailsDto>.Succes(accountDetails, "Account details retrieved successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving account details for account number {AccountNumber}", accountNumber);
             return BaseResponse<AccountDetailsDto>.Failure("An error occurred while retrieving account details");
         }
     }
