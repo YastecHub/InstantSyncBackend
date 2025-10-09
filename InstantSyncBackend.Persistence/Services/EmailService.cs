@@ -8,17 +8,11 @@ using MimeKit;
 
 namespace InstantSyncBackend.Persistence.Services;
 
-public class EmailService : IEmailService
+public class EmailService(
+    EmailSettings _emailSettings, 
+    ILogger<EmailService> _logger, 
+    IOptions<EmailSettings> emailSettings) : IEmailService
 {
-    private readonly EmailSettings _emailSettings;
-    private readonly ILogger<EmailService> _logger;
-
-    public EmailService(IOptions<EmailSettings> emailSettings, ILogger<EmailService> logger)
-    {
-        _emailSettings = emailSettings.Value;
-        _logger = logger;
-    }
-
     public async Task<bool> SendEmailAsync(string to, string subject, string body, bool isHtml = true)
     {
         try

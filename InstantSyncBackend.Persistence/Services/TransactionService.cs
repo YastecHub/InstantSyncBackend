@@ -8,7 +8,10 @@ using Microsoft.Extensions.Logging;
 
 namespace InstantSyncBackend.Persistence.Services;
 
-public class TransactionService(IAccountRepository _accountRepository, ITransactionRepository _transactionRepository, ILogger<TransactionService> _logger) : ITransactionService
+public class TransactionService(
+    IAccountRepository _accountRepository, 
+    ITransactionRepository _transactionRepository, 
+    ILogger<TransactionService> _logger) : ITransactionService
 {
     public async Task<BaseResponse<TransactionResponseDto>> TransferFundsAsync(string userId, TransferDto transferDto)
     {

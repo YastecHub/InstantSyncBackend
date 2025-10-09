@@ -6,17 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace InstantSyncBackend.Persistence.Services;
 
-public class AccountService : IAccountService
+public class AccountService(
+    IAccountRepository _accountRepository, 
+    ILogger<AccountService> _logger) : IAccountService
 {
-    private readonly IAccountRepository _accountRepository;
-    private readonly ILogger<AccountService> _logger;
-
-    public AccountService(IAccountRepository accountRepository, ILogger<AccountService> logger)
-    {
-        _accountRepository = accountRepository;
-        _logger = logger;
-    }
-
     public async Task<BaseResponse<AccountDetailsDto>> GetAccountDetailsByUserIdAsync(string userId)
     {
         _logger.LogInformation("Retrieving account details for user: {UserId}", userId);

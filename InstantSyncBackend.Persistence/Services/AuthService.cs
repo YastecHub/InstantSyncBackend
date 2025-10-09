@@ -13,7 +13,15 @@ using InstantSyncBackend.Application.Interfaces.IRepositories;
 
 namespace InstantSyncBackend.Persistence.Services;
 
-public class AuthService(UserManager<ApplicationUser> _userManager, IJwtTokenGenerator _jwtTokenGenerator, IValidator<RegisterDto> _registerValidator, IValidator<LoginDto> _loginValidator, IValidator<ForgotPasswordDto> _forgotPasswordValidator, IEmailService _emailService, IAccountRepository _accountRepository, ILogger<AuthService> _logger) : IAuthService
+public class AuthService(
+    UserManager<ApplicationUser> _userManager, 
+    IJwtTokenGenerator _jwtTokenGenerator, 
+    IValidator<RegisterDto> _registerValidator, 
+    IValidator<LoginDto> _loginValidator, 
+    IValidator<ForgotPasswordDto> _forgotPasswordValidator, 
+    IEmailService _emailService, 
+    IAccountRepository _accountRepository, 
+    ILogger<AuthService> _logger) : IAuthService
 {
     public async Task<BaseResponse<AuthResponseDto>> RegisterAsync(RegisterDto registerDto)
     {
