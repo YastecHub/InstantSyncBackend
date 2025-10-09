@@ -38,4 +38,6 @@ public class TransactionHistoryDto
     public string? BeneficiaryAccountNumber { get; set; }
     public string? BeneficiaryBankName { get; set; }
     public string? Description { get; set; }
+    // Indicates whether the entry was a debit or credit from the user's perspective: "Sent" or "Received"
+    public string EntryType { get; set; }
 }

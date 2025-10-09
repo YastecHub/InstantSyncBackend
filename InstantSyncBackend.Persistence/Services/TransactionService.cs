@@ -62,16 +62,37 @@ public class TransactionService(
                 Status = TransactionStatus.Completed,
                 BeneficiaryAccountNumber = transferDto.BeneficiaryAccountNumber,
                 BeneficiaryBankName = transferDto.BeneficiaryBankName,
-                Description = transferDto.Description
+                Description = transferDto.Description,
+                CompletedAt = DateTime.UtcNow
             };
 
-            // Update account balances
+            // Update account balances immediately (commit the transfer)
             account.Balance -= transferDto.Amount;
-            account.PendingBalance += transferDto.Amount;
+            // don't keep amount in pending since transfer is immediate
             account.UpdatedAt = DateTime.UtcNow;
 
+            // Credit beneficiary immediately
+            beneficiaryAccount.Balance += transferDto.Amount;
+            beneficiaryAccount.UpdatedAt = DateTime.UtcNow;
+
+            // Create a corresponding transaction record for the beneficiary so both sides are tracked
+            var beneficiaryTransaction = new Transaction
+            {
+                TransactionReference = $"{transaction.TransactionReference}-RCV",
+                AccountId = beneficiaryAccount.Id,
+                Amount = transaction.Amount,
+                Type = TransactionType.Transfer,
+                Status = TransactionStatus.Completed,
+                BeneficiaryAccountNumber = beneficiaryAccount.AccountNumber,
+                BeneficiaryBankName = transaction.BeneficiaryBankName,
+                Description = $"Credit from transfer {transaction.TransactionReference}",
+                CompletedAt = DateTime.UtcNow
+            };
+
             await _transactionRepository.AddAsync(transaction);
+            await _transactionRepository.AddAsync(beneficiaryTransaction);
             await _accountRepository.UpdateAsync(account);
+            await _accountRepository.UpdateAsync(beneficiaryAccount);
             await _accountRepository.SaveChangesAsync();
 
             // Simulate NIP response
@@ -79,15 +100,14 @@ public class TransactionService(
             {
                 TransactionReference = transaction.TransactionReference,
                 ResponseCode = "00",
-                ResponseDescription = "Transaction processing",
-                SettlementDate = DateTime.UtcNow.AddMinutes(5),
+                ResponseDescription = "Transaction completed",
+                SettlementDate = DateTime.UtcNow,
                 Amount = transferDto.Amount,
                 OriginatorAccountNumber = account.AccountNumber,
                 BeneficiaryAccountNumber = transferDto.BeneficiaryAccountNumber
             };
 
-            // Start async transaction status update (simulated)
-            _ = UpdateTransactionStatusAsync(transaction.Id);
+            // Do not start async status update since transfer is immediate
 
             return BaseResponse<TransactionResponseDto>.Succes(response);
         }
@@ -123,7 +143,7 @@ public class TransactionService(
                 AccountId = account.Id,
                 Amount = addFundsDto.Amount,
                 Type = TransactionType.Deposit,
-                Status = TransactionStatus.Initiated,
+                Status = TransactionStatus.Completed,
                 Description = $"Deposit via {addFundsDto.PaymentMethod}"
             };
 
@@ -166,6 +186,7 @@ public class TransactionService(
         {
             var transactions = await _transactionRepository.GetUserTransactionsAsync(userId, startDate, endDate);
 
+            // Map to DTOs first
             var transactionDtos = transactions.Select(t => new TransactionHistoryDto
             {
                 TransactionReference = t.TransactionReference,
@@ -175,8 +196,55 @@ public class TransactionService(
                 Status = t.Status.ToString(),
                 BeneficiaryAccountNumber = t.BeneficiaryAccountNumber,
                 BeneficiaryBankName = t.BeneficiaryBankName,
-                Description = t.Description
+                Description = t.Description,
+                EntryType = string.Empty
             }).ToList();
+
+            // Determine entry type (Sent / Received) from perspective of the user's account
+            var userAccount = await _accountRepository.GetByUserIdAsync(userId);
+            if (userAccount != null)
+            {
+                foreach (var dto in transactionDtos)
+                {
+                    var entity = transactions.FirstOrDefault(t => t.TransactionReference == dto.TransactionReference);
+                    if (entity == null)
+                    {
+                        dto.EntryType = "Unknown";
+                        continue;
+                    }
+
+                    if (entity.Type == TransactionType.Deposit)
+                    {
+                        dto.EntryType = "Received";
+                        continue;
+                    }
+
+                    // For transfers, determine if the record represents a sent or received transaction
+                    if (entity.Type == TransactionType.Transfer)
+                    {
+                        if (entity.AccountId == userAccount.Id && !string.IsNullOrEmpty(entity.BeneficiaryAccountNumber) && entity.BeneficiaryAccountNumber == userAccount.AccountNumber)
+                        {
+                            dto.EntryType = "Received";
+                        }
+                        else if (entity.AccountId == userAccount.Id)
+                        {
+                            dto.EntryType = "Sent";
+                        }
+                        else if (!string.IsNullOrEmpty(entity.BeneficiaryAccountNumber) && entity.BeneficiaryAccountNumber == userAccount.AccountNumber)
+                        {
+                            dto.EntryType = "Received";
+                        }
+                        else
+                        {
+                            dto.EntryType = "Sent";
+                        }
+                    }
+                    else
+                    {
+                        dto.EntryType = "Unknown";
+                    }
+                }
+            }
 
             return BaseResponse<List<TransactionHistoryDto>>.Succes(transactionDtos);
         }
@@ -229,8 +297,16 @@ public class TransactionService(
             var transaction = await _transactionRepository.GetByIdAsync(transactionId);
             if (transaction == null) return;
 
-            var account = await _accountRepository.GetByIdAsync(transaction.AccountId);
-            if (account == null) return;
+            var senderAccount = await _accountRepository.GetByIdAsync(transaction.AccountId);
+            if (senderAccount == null) return;
+
+            // Get beneficiary account for transfer transactions
+            Account? beneficiaryAccount = null;
+            if (transaction.Type == TransactionType.Transfer)
+            {
+                beneficiaryAccount = await _accountRepository.GetByAccountNumberAsync(transaction.BeneficiaryAccountNumber);
+                if (beneficiaryAccount == null) return;
+            }
 
             // Simulate success rate (90% success, 10% failure)
             var success = Random.Shared.NextDouble() > 0.1;
@@ -243,12 +319,30 @@ public class TransactionService(
                 // For completed transactions, move amount from pending to actual balance
                 if (transaction.Type == TransactionType.Deposit)
                 {
-                    account.Balance += transaction.Amount;
-                    account.PendingBalance -= transaction.Amount;
+                    senderAccount.Balance += transaction.Amount;
+                    senderAccount.PendingBalance -= transaction.Amount;
                 }
                 else if (transaction.Type == TransactionType.Transfer)
                 {
-                    account.PendingBalance -= transaction.Amount;
+                    senderAccount.PendingBalance -= transaction.Amount;
+                    // Credit beneficiary account
+                    beneficiaryAccount.Balance += transaction.Amount;
+
+                    // Create a corresponding transaction record for the beneficiary so both sides are tracked
+                    var beneficiaryTransaction = new Transaction
+                    {
+                        TransactionReference = $"{transaction.TransactionReference}-RCV",
+                        AccountId = beneficiaryAccount.Id,
+                        Amount = transaction.Amount,
+                        Type = TransactionType.Transfer,
+                        Status = TransactionStatus.Completed,
+                        BeneficiaryAccountNumber = beneficiaryAccount.AccountNumber,
+                        BeneficiaryBankName = transaction.BeneficiaryBankName,
+                        Description = $"Credit from transfer {transaction.TransactionReference}",
+                        CompletedAt = DateTime.UtcNow
+                    };
+
+                    await _transactionRepository.AddAsync(beneficiaryTransaction);
                 }
             }
             else
@@ -256,19 +350,27 @@ public class TransactionService(
                 // For failed transactions, reverse the pending amounts
                 if (transaction.Type == TransactionType.Deposit)
                 {
-                    account.PendingBalance -= transaction.Amount;
+                    senderAccount.PendingBalance -= transaction.Amount;
                 }
                 else if (transaction.Type == TransactionType.Transfer)
                 {
-                    account.Balance += transaction.Amount;
-                    account.PendingBalance -= transaction.Amount;
+                    senderAccount.Balance += transaction.Amount;
+                    senderAccount.PendingBalance -= transaction.Amount;
                 }
             }
 
-            account.UpdatedAt = DateTime.UtcNow;
+            senderAccount.UpdatedAt = DateTime.UtcNow;
+            if (beneficiaryAccount != null)
+            {
+                beneficiaryAccount.UpdatedAt = DateTime.UtcNow;
+            }
 
             await _transactionRepository.UpdateAsync(transaction);
-            await _accountRepository.UpdateAsync(account);
+            await _accountRepository.UpdateAsync(senderAccount);
+            if (beneficiaryAccount != null)
+            {
+                await _accountRepository.UpdateAsync(beneficiaryAccount);
+            }
             await _accountRepository.SaveChangesAsync();
         }
         catch (Exception ex)
