@@ -102,6 +102,7 @@ public class TransactionService(
                 ResponseCode = "00",
                 ResponseDescription = "Transaction completed",
                 SettlementDate = DateTime.UtcNow,
+                Status = transaction.Status,
                 Amount = transferDto.Amount,
                 OriginatorAccountNumber = account.AccountNumber,
                 BeneficiaryAccountNumber = transferDto.BeneficiaryAccountNumber
